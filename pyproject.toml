@@ -7,7 +7,11 @@ authors = [
     { name = "Benoit Roux", email = "benoit.roux@gmail.com" }
 ]
 requires-python = ">=3.12, <3.13"
-dependencies = []
+dependencies = [
+    "numpy>=1.26.4",
+    "pandas[parquet]>=3.0.1",
+    "scikit-image>=0.26.0",
+]
 
 [build-system]
 requires = ["hatchling"]
