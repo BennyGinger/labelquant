@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 import logging
 
 from numpy.typing import NDArray
@@ -135,10 +134,7 @@ class ArrayData:
             yield self.channel(i)
     
 
-class ArrayRole(StrEnum):
-    INTENSITY = "intensity"
-    OBJECT_LABELS = "object_labels"
-    REFERENCE = "reference"
+ArrayRole = Literal["intensity", "object_labels", "reference"]
     
 
 @dataclass
@@ -175,7 +171,7 @@ class ArrayInputs:
         """
         data = ArrayData(array=array, axes=axes, channel_labels=channel_labels)
         
-        if role is ArrayRole.INTENSITY:
+        if role == "intensity":
             for object_name, labels in self.object_labels.items():
                 self._validate_object_labels(object_name, labels, data)
             self.intensity = data
@@ -184,13 +180,13 @@ class ArrayInputs:
         if name is None:
             raise ValueError("Name must be provided for object labels or reference arrays.")
         
-        if role is ArrayRole.OBJECT_LABELS:
+        if role == "object_labels":
             if self.intensity is not None:
                 self._validate_object_labels(name, data, self.intensity)
             if name in self.object_labels:
                 logger.warning(f"Overwriting existing object labels with name '{name}'.")
             self.object_labels[name] = data
-        elif role is ArrayRole.REFERENCE:
+        elif role == "reference":
             if name in self.references:
                 logger.warning(f"Overwriting existing reference array with name '{name}'.")
             self.references[name] = data
