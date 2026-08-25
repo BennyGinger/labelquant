@@ -16,7 +16,16 @@ MEMMAP_THRESHOLD = "10M"
 
 @dataclass
 class ExtractData:
+    """Arrays and acquisition timing used for region quantification.
+
+    Attributes:
+        array_data: Intensity, object-label, and reference arrays to quantify.
+        interval: Time between consecutive frames in seconds. When unavailable,
+            the output ``time_sec`` column contains missing values.
+    """
+
     array_data: ArrayInputs = field(default_factory=ArrayInputs)
+    interval: float | None = None
 
     def add_array(self,
                   role: ArrayRole,
@@ -50,6 +59,9 @@ class ExtractData:
         Args:
             additional_properties: Additional scikit-image region properties to extract.
             workers: Number of frame processes. A value of 1 runs serially.
+
+        The returned table contains a one-based ``frame`` column and a
+        zero-based ``time_sec`` column derived from ``interval``.
         """
         if isinstance(workers, bool) or workers < 1:
             raise ValueError("workers must be an integer greater than or equal to 1.")
@@ -93,7 +105,16 @@ class ExtractData:
         if not results:
             return pd.DataFrame()
 
-        return pd.concat(results, ignore_index=True)
+        dataframe = pd.concat(results, ignore_index=True)
+
+        if self.interval is None:
+            dataframe["time_sec"] = pd.NA
+        else:
+            dataframe["time_sec"] = (
+                dataframe["frame"] - 1
+            ) * self.interval
+
+        return dataframe
 
 
 

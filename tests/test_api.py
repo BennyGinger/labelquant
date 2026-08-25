@@ -5,7 +5,7 @@ import pytest
 from labelquant import ExtractData
 
 
-def _extractor() -> ExtractData:
+def _extractor(*, interval: float | None = None) -> ExtractData:
     image = np.zeros((2, 2, 4, 4), dtype=np.uint16)
     image[:, 0] = 10
     image[:, 1] = 20
@@ -13,7 +13,7 @@ def _extractor() -> ExtractData:
     labels = np.zeros((2, 4, 4), dtype=np.uint16)
     labels[:, 1:3, 1:3] = 1
 
-    extractor = ExtractData()
+    extractor = ExtractData(interval=interval)
     extractor.add_array(
         "intensity",
         image,
@@ -34,6 +34,19 @@ def test_parallel_quantification_matches_serial() -> None:
     parallel = _extractor().quantify(workers=2)
 
     pd.testing.assert_frame_equal(parallel, serial)
+
+
+def test_quantification_adds_time_in_seconds() -> None:
+    dataframe = _extractor(interval=10.0).quantify(workers=1)
+
+    assert dataframe.loc[dataframe["frame"] == 1, "time_sec"].eq(0.0).all()
+    assert dataframe.loc[dataframe["frame"] == 2, "time_sec"].eq(10.0).all()
+
+
+def test_quantification_uses_missing_time_without_interval() -> None:
+    dataframe = _extractor().quantify(workers=1)
+
+    assert dataframe["time_sec"].isna().all()
 
 
 @pytest.mark.parametrize("workers", [0, -1, True])
