@@ -183,10 +183,19 @@ class ArrayInputs:
         if role == "object_labels":
             if self.intensity is not None:
                 self._validate_object_labels(name, data, self.intensity)
+            for reference_name, reference in self.references.items():
+                self._validate_reference(reference_name, reference, name, data)
             if name in self.object_labels:
                 logger.warning(f"Overwriting existing object labels with name '{name}'.")
             self.object_labels[name] = data
         elif role == "reference":
+            if data.channel_labels is None:
+                raise ValueError(
+                    f"Reference array {name!r} requires a channel label for the output table.")
+            if not np.all((data.array == 0) | (data.array == 1)):
+                raise ValueError(f"Reference array {name!r} must contain only binary values 0 and 1.")
+            for object_name, labels in self.object_labels.items():
+                self._validate_reference(name, data, object_name, labels)
             if name in self.references:
                 logger.warning(f"Overwriting existing reference array with name '{name}'.")
             self.references[name] = data
@@ -225,3 +234,31 @@ class ArrayInputs:
             raise ValueError(f"Intensity array shape without channels is {intensity_shape}, "
                              f"but object labels {name!r} shape without channels is "
                              f"{labels_shape}.")
+
+    @staticmethod
+    def _validate_reference(reference_name: str,
+                            reference: ArrayData,
+                            object_name: str,
+                            labels: ArrayData,
+                            ) -> None:
+        """Validate a reference array against one object-label array."""
+        reference_axes = reference.axes.replace("T", "").replace("C", "")
+        label_axes = labels.axes.replace("T", "").replace("C", "")
+        if reference_axes != label_axes:
+            raise ValueError(
+                f"Reference {reference_name!r} spatial axes {reference_axes!r} are "
+                f"incompatible with object labels {object_name!r} axes {label_axes!r}.")
+
+        reference_shape = tuple(size for axis, size in zip(
+            reference.axes, reference.array.shape, strict=True) if axis not in {"T", "C"})
+        label_shape = tuple(size for axis, size in zip(
+            labels.axes, labels.array.shape, strict=True) if axis not in {"T", "C"})
+        if reference_shape != label_shape:
+            raise ValueError(
+                f"Reference {reference_name!r} spatial shape {reference_shape} does not "
+                f"match object labels {object_name!r} shape {label_shape}.")
+
+        if reference.frame_count not in {1, labels.frame_count}:
+            raise ValueError(
+                f"Reference {reference_name!r} has {reference.frame_count} frames, but "
+                f"object labels {object_name!r} have {labels.frame_count} frames.")

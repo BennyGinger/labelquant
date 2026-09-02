@@ -6,6 +6,7 @@ from skimage.measure import regionprops_table
 from numpy.typing import NDArray
 
 from labelquant.formatting import format_region_table
+from labelquant.distances import reference_distance_table
 from labelquant.models import ArrayData
 
 
@@ -40,6 +41,7 @@ def quantify_region_frame(
     object_name: str,
     object_channel: str | None,
     additional_properties: str | Sequence[str] | None,
+    references: dict[str, ArrayData],
 ) -> pd.DataFrame:
     """
     Prepare and quantify one complete frame of an object-label array.
@@ -57,6 +59,13 @@ def quantify_region_frame(
         channel_labels=image_frame.channel_labels,
         label_axes=label_frame.axes,
     )
+
+    reference_df = reference_distance_table(
+        label_frame.array,
+        references,
+        frame_index=frame_index,)
+    if not reference_df.empty:
+        frame_df = frame_df.merge(reference_df, on="label", how="left")
 
     frame_df["frame"] = frame_index + 1
     frame_df["object_name"] = object_name

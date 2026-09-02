@@ -83,6 +83,7 @@ class ExtractData:
              name,
              object_channel,
              additional_properties,
+             self.array_data.references,
             )
             for name, labels_array in object_labels_dict.items()
             for object_channel, label_stack in labels_array.iter_channels()
