@@ -2,10 +2,11 @@ from collections.abc import Sequence
 from typing import Any
 from dataclasses import dataclass, field
 
-from labelquant.models import ArrayInputs, ArrayRole
+from labelquant.models import ArrayInputs
 from joblib import Parallel, delayed
 from numpy.typing import NDArray
 import pandas as pd
+import numpy as np
 
 from labelquant.regions import quantify_region_frame
 
@@ -22,28 +23,64 @@ class ExtractData:
         array_data: Intensity, object-label, and reference arrays to quantify.
         interval: Time between consecutive frames in seconds. When unavailable,
             the output ``time_sec`` column contains missing values.
+        pixel_size: Optional physical size of one pixel. When supplied, the
+            output includes ``dist_um`` alongside ``dist_pixel``.
     """
 
     array_data: ArrayInputs = field(default_factory=ArrayInputs)
     interval: float | None = None
+    pixel_size: float | None = None
 
-    def add_array(self,
-                  role: ArrayRole,
-                  array: NDArray[Any],
-                  axes: str,
-                  *,
-                  name: str | None = None,
-                  channel_labels: Sequence[str] | None = None) -> None:
-        """Add an array to the ExtractData instance.
+    def __post_init__(self) -> None:
+        if self.interval is not None and (
+                not np.isfinite(self.interval) or self.interval < 0):
+            raise ValueError("interval must be finite and non-negative.")
+        if self.pixel_size is not None and (
+                not np.isfinite(self.pixel_size) or self.pixel_size <= 0):
+            raise ValueError("pixel_size must be finite and greater than zero.")
 
-        Args:
-            role (ArrayRole): The role of the array (i.e., intensity, object_labels or reference).
-            array (NDArray[Any]): The array data to add.
-            axes (str): A string representing the axes of the array.
-            name (str | None): Name is only optional for intensity arrays, otherwise it is required. It should be unique name to identify the object labels (it would be used on the output sheet, e.g. 'tracking', 'cyto'...), Defaults to None.
-            channel_labels (Sequence[str] | None, optional): Optional labels for channels if 'C' is in axes. Defaults to None.
-        """
-        self.array_data.add_array(role=role, array=array, axes=axes, name=name, channel_labels=channel_labels)
+    def add_intensity(self,
+                      array: NDArray[Any],
+                      axes: str,
+                      *,
+                      channel_labels: Sequence[str] | None = None,
+                      ) -> None:
+        """Register the intensity array to quantify."""
+        self.array_data.add_array(
+            role="intensity",
+            array=array,
+            axes=axes,
+            channel_labels=channel_labels,)
+
+    def add_labels(self,
+                   array: NDArray[Any],
+                   axes: str,
+                   *,
+                   name: str,
+                   channel_labels: Sequence[str] | None = None,
+                   ) -> None:
+        """Register one named object-label array."""
+        self.array_data.add_array(
+            role="object_labels",
+            array=array,
+            axes=axes,
+            name=name,
+            channel_labels=channel_labels,)
+
+    def add_ref(self,
+                array: NDArray[Any],
+                axes: str,
+                *,
+                name: str,
+                channel_labels: Sequence[str] | None = None,
+                ) -> None:
+        """Register one named binary reference-mask array."""
+        self.array_data.add_array(
+            role="reference",
+            array=array,
+            axes=axes,
+            name=name,
+            channel_labels=channel_labels,)
 
     def quantify(
         self,
@@ -115,6 +152,12 @@ class ExtractData:
                 dataframe["frame"] - 1
             ) * self.interval
 
+        if "dist_pixel" in dataframe:
+            dataframe["dist_um"] = (
+                dataframe["dist_pixel"] * self.pixel_size
+                if self.pixel_size is not None
+                else np.nan)
+
         return dataframe
 
 
@@ -140,8 +183,8 @@ if __name__ == "__main__":
     
     extractor = ExtractData()
 
-    extractor.add_array(role="intensity", array=img.array, axes=img.axes, channel_labels=img_reader.channel_labels)
-    extractor.add_array(role="object_labels", array=mask.array, axes=mask.axes, name="tracking", channel_labels=mask_reader.channel_labels)
+    extractor.add_intensity(array=img.array, axes=img.axes, channel_labels=img_reader.channel_labels)
+    extractor.add_labels(array=mask.array, axes=mask.axes, name="tracking", channel_labels=mask_reader.channel_labels)
     print(f"Added arrays to ExtractData in {time() - time_start:.2f} seconds.")
     time_start = time()
     
